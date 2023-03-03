@@ -43,6 +43,10 @@ class Gaussian:
         return g
 
     @property
+    def dims(self) -> list:
+        return self._dims.copy()
+
+    @property
     def mean(self) -> np.ndarray:
         return np.linalg.inv(self._prec) @ self._info
 

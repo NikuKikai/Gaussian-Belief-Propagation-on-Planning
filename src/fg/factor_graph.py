@@ -47,7 +47,7 @@ class VNode(Node):
                 continue
             msg = _msg * msg
         if msg is None:
-            msg = Gaussian.identity(self._dims)
+            msg = Gaussian.identity(self.dims)
         return msg
 
     def propagate(self):
@@ -59,7 +59,7 @@ class VNode(Node):
 
 class FNode(Node):
     def __init__(self, name: str, vnodes: List[VNode], factor: Gaussian = None) -> None:
-        dims = list(itertools.chain(*[v._dims for v in vnodes]))
+        dims = list(itertools.chain(*[v.dims for v in vnodes]))
         super().__init__(name, dims)
         self._vnodes = vnodes
         self._factor: Gaussian = Gaussian.identity(dims) if factor is None else factor
@@ -69,7 +69,7 @@ class FNode(Node):
         pass
 
     def calc_msg(self, edge: Edge) -> Gaussian:
-        msg = self._factor
+        msg = self._factor.copy()
 
         for e in self.edges:
             if e is edge:
