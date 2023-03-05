@@ -32,11 +32,11 @@ if __name__ == '__main__':
         env.step()
         for agent in env._agents:
             c = 255
-            for vnode, p in agent._beliefs.items():
-                if p is None:
+            for s in agent.get_state():
+                if s is None:
                     continue
-                x, y, vx, vy = p.mean[:, 0]
-                pg.draw.circle(surf, (c, c, c), (x+10, y+10), 5, 1)
+                x, y, vx, vy = s
+                pg.draw.circle(surf, (c, c, c), (x+10, y+10), agent._radius, 1)
                 c -= 33
 
         for event in pg.event.get():

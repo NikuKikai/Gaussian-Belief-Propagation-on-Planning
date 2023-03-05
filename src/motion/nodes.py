@@ -95,10 +95,10 @@ class ObstacleFNode(FNode):
 
 class DistFNode(FNode):
     def __init__(self, name: str, vnodes: List[VNode], factor: Gaussian = None,
-                 safe_radius: float = 50, z_precision: float = 100) -> None:
+                 safe_dist: float = 20, z_precision: float = 100) -> None:
         assert len(vnodes) == 2
         super().__init__(name, vnodes, factor)
-        self._safe_radius = safe_radius
+        self._safe_radius = safe_dist
         self._z_precision = z_precision
 
     def update_factor(self):
@@ -110,32 +110,36 @@ class DistFNode(FNode):
             v1 += np.random.rand(4, 1) * 0.01
         v = np.vstack([v0, v1])  # [8, 1]
 
-        distance = np.linalg.norm(v0 - v1)
+        distance = np.linalg.norm(v0[:2, 0] - v1[:2, 0])
         distance_gradx0, distance_grady0 = v0[0, 0]-v1[0, 0], v0[1, 0]-v1[1, 0]
         distance_gradx0 /= distance
         distance_grady0 /= distance
-        distance -= self._safe_radius * 2
 
-        h = np.array([[max(0, 1 - distance / self._safe_radius / 2)]])
-        jacob = np.array([[
-            -distance_gradx0/self._safe_radius/2, -distance_grady0/self._safe_radius/2, 0, 0,
-            distance_gradx0/self._safe_radius/2, distance_grady0/self._safe_radius/2, 0, 0]])  # [1, 8]
-        precision = np.identity(1) * self._z_precision
+        if distance > self._safe_radius:
+            prec = np.identity(8) * 0.0001
+            info = prec @ v
 
-        prec = jacob.T @ precision @ jacob
-        info = jacob.T @ precision @ (jacob @ v + z - h)
+        else:
+            h = np.array([[1 - distance / self._safe_radius]])
+            jacob = np.array([[
+                -distance_gradx0/self._safe_radius, -distance_grady0/self._safe_radius, 0, 0,
+                distance_gradx0/self._safe_radius, distance_grady0/self._safe_radius, 0, 0]])  # [1, 8]
+            precision = np.identity(1) * self._z_precision * (self._safe_radius**2)
 
-        # NOTE
-        # prec has a structure like [A, 0, C, 0] , which is not invertable
-        #                           [0, 0, 0, 0]
-        #                           [D, 0, B, 0]
-        #                           [0, 0, 0, 0]
-        # modify prec to be [A, 0, C, 0] to avoid this problem and will not affect result.
-        #                   [0, I, 0, 0]
-        #                   [D, 0, B, 0]
-        #                   [0, 0, 0, I]
-        prec[2, 2] = 1
-        prec[3, 3] = 1
-        prec[6, 6] = 1
-        prec[7, 7] = 1
+            prec = jacob.T @ precision @ jacob
+            info = jacob.T @ precision @ (jacob @ v + z - h)
+
+            # NOTE
+            # prec has a structure like [A, 0, C, 0] , which is not invertable
+            #                           [0, 0, 0, 0]
+            #                           [D, 0, B, 0]
+            #                           [0, 0, 0, 0]
+            # modify prec to be [A, 0, C, 0] to avoid this problem and will not affect result.
+            #                   [0, I, 0, 0]
+            #                   [D, 0, B, 0]
+            #                   [0, 0, 0, I]
+            prec[2, 2] = 1
+            prec[3, 3] = 1
+            prec[6, 6] = 1
+            prec[7, 7] = 1
         self._factor = Gaussian.from_info(self.dims, info, prec)

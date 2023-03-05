@@ -14,6 +14,10 @@ class Node:
         return self._name
 
     @property
+    def name(self) -> str:
+        return self._name
+
+    @property
     def dims(self) -> list:
         return self._dims.copy()
 

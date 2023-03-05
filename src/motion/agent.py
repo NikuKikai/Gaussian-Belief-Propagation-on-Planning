@@ -45,18 +45,38 @@ class Agent:
             self._graph.connect(v, f)
         self._graph.connect(self._vnodes[-1], self._fnode_end)
 
-        self._beliefs = None
         self._others = {}
 
     def __str__(self) -> str:
         return f'({self._name} s={self._state})'
 
     @property
+    def name(self) -> str:
+        return self._name
+    @property
     def x(self) -> float:
+        '''current x'''
         return self._state[0, 0]
     @property
     def y(self) -> float:
+        '''current y'''
         return self._state[1, 0]
+    @property
+    def r(self) -> float:
+        '''radius'''
+        return self._radius
+
+    def get_state(self) -> List[np.ndarray]:
+        poss = []
+        for v in self._vnodes:
+            if v.belief is None:
+                poss.append(None)
+            else:
+                poss.append(v.belief.mean[:, 0])
+        return poss
+
+    def get_target(self) -> np.ndarray:
+        return self._fnode_end._factor.mean
 
     def step_all_async(self):
         # Search near agents
@@ -71,11 +91,8 @@ class Agent:
         for i in range(self._steps * 3):
             for o in self._others:
                 self.send(o)
-            beliefs = self._graph.loopy_propagate()
 
-        v1 = beliefs[self._vnodes[1]].mean
-        self.set_state(v1)
-        self._beliefs = beliefs
+        self.set_state(self._vnodes[1].belief.mean)
 
     def step_connect(self):
         # Search near agents
@@ -91,11 +108,10 @@ class Agent:
             self.send(o)
 
     def step_propagate(self):
-        self._beliefs = self._graph.loopy_propagate()
+        self._graph.loopy_propagate()
 
     def step_move(self):
-        v1 = self._beliefs[self._vnodes[1]].mean
-        self.set_state(v1)
+        self.set_state(self._vnodes[1].belief.mean)
 
     def set_state(self, state):
         self._state = np.array(state)
@@ -118,23 +134,22 @@ class Agent:
             self._fnode_end._factor = Gaussian.identity(self._vnodes[-1].dims)
 
     def push_msg(self, msg):
+        '''Called by other agent to simulate the other sending message to self agent.'''
         _type, aname, vname, p = msg
         if p is None:
             return
         if aname not in self._others:
             print(f'push msg: name {aname} not found')
             return
-        vnodes = self._others[aname]['v']
+        vnodes: List[RemoteVNode] = self._others[aname]['v']
         vnode: RemoteVNode = None
         for v in vnodes:
-            if v._name == vname:
+            if v.name == vname:
                 vnode = v
                 break
         if vnode is None:
             print('vname not found')
             return
-
-        # print(self._name, _type, vname, p._dims, vnode._dims, vnode)
 
         p: Gaussian
         p._dims = vnode.dims
@@ -148,14 +163,13 @@ class Agent:
             vnode._msgs[e] = p
             # e.set_message_from(vnode, p)
 
-
     def setup_com(self, other: 'Agent'):
         on = other._name
         if on in self._others:
             return
 
         vnodes = [RemoteVNode(f'{on}.v{i}', [f'{on}.v{i}.x', f'{on}.v{i}.y', f'{on}.v{i}.vx', f'{on}.v{i}.vy']) for i in range(1, self._steps)]
-        fnodes = [DistFNode(f'{on}.f{i}', [vnodes[i-1], self._vnodes[i]],) for i in range(1, self._steps)]
+        fnodes = [DistFNode(f'{on}.f{i}', [vnodes[i-1], self._vnodes[i]], safe_dist=self._radius+other._radius) for i in range(1, self._steps)]
         for i in range(1, self._steps):
             self._graph.connect(self._vnodes[i], fnodes[i-1])
             self._graph.connect(vnodes[i-1], fnodes[i-1])
