@@ -28,7 +28,7 @@ if __name__ == '__main__':
     surf = pg.display.set_mode((1000, 800))
     xoff, yoff= 500, 400
     while True:
-        surf.fill((0, 0, 0))
+        surf.fill((255, 255, 255))
 
         # Draw obstacles
         for o in omap.objects.values():
@@ -57,4 +57,4 @@ if __name__ == '__main__':
                 pg.quit()
                 sys.exit()
         pg.display.update()
-        pg.time.wait(100)
+        pg.time.wait(10)
