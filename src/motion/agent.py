@@ -33,7 +33,7 @@ class Agent:
         self.set_target(target)
 
         self._fnodes_dyna = [DynaFNode(f'fd{i}{i+1}', [self._vnodes[i], self._vnodes[i+1]]) for i in range(steps-1)]
-        self._fnodes_obst = [ObstacleFNode(f'fo{i}', [self._vnodes[i]], omap=omap) for i in range(1, steps)]
+        self._fnodes_obst = [ObstacleFNode(f'fo{i}', [self._vnodes[i]], omap=omap, safe_dist=self.r) for i in range(1, steps)]
 
         self._graph = FactorGraph()
         self._graph.connect(self._vnodes[0], self._fnode_start)
@@ -169,7 +169,7 @@ class Agent:
             return
 
         vnodes = [RemoteVNode(f'{on}.v{i}', [f'{on}.v{i}.x', f'{on}.v{i}.y', f'{on}.v{i}.vx', f'{on}.v{i}.vy']) for i in range(1, self._steps)]
-        fnodes = [DistFNode(f'{on}.f{i}', [vnodes[i-1], self._vnodes[i]], safe_dist=self._radius+other._radius) for i in range(1, self._steps)]
+        fnodes = [DistFNode(f'{on}.f{i}', [vnodes[i-1], self._vnodes[i]], safe_dist=self.r+other.r) for i in range(1, self._steps)]
         for i in range(1, self._steps):
             self._graph.connect(self._vnodes[i], fnodes[i-1])
             self._graph.connect(vnodes[i-1], fnodes[i-1])

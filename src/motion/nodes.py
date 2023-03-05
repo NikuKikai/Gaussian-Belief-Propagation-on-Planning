@@ -66,11 +66,11 @@ class DynaFNode(FNode):
 
 class ObstacleFNode(FNode):
     def __init__(self, name: str, vnodes: List[VNode], factor: Gaussian = None,
-                 omap: ObstacleMap = None, safe_radius: float = 5, z_precision: float = 1000) -> None:
+                 omap: ObstacleMap = None, safe_dist: float = 5, z_precision: float = 1000) -> None:
         assert len(vnodes) == 1
         super().__init__(name, vnodes, factor)
         self._omap = omap
-        self._safe_radius = safe_radius
+        self._safe_dist = safe_dist
         self._z_precision = z_precision
 
     def update_factor(self):
@@ -81,11 +81,11 @@ class ObstacleFNode(FNode):
         distance, distance_gradx, distance_grady = self._omap.get_d_grad(v[0, 0], v[1, 0])
         # distance -= self._safe_radius
 
-        h = np.array([[max(0, 1 - distance / self._safe_radius)]])
-        if distance > self._safe_radius:
+        h = np.array([[max(0, 1 - distance / self._safe_dist)]])
+        if distance > self._safe_dist:
             jacob = np.zeros((1, 4))
         else:
-            jacob = np.array([[-distance_gradx/self._safe_radius, -distance_grady/self._safe_radius, 0, 0]])  # [1, 4]
+            jacob = np.array([[-distance_gradx/self._safe_dist, -distance_grady/self._safe_dist, 0, 0]])  # [1, 4]
         precision = np.identity(1) * self._z_precision
 
         prec = jacob.T @ precision @ jacob
@@ -98,7 +98,7 @@ class DistFNode(FNode):
                  safe_dist: float = 20, z_precision: float = 100) -> None:
         assert len(vnodes) == 2
         super().__init__(name, vnodes, factor)
-        self._safe_radius = safe_dist
+        self._safe_dist = safe_dist
         self._z_precision = z_precision
 
     def update_factor(self):
@@ -115,16 +115,16 @@ class DistFNode(FNode):
         distance_gradx0 /= distance
         distance_grady0 /= distance
 
-        if distance > self._safe_radius:
+        if distance > self._safe_dist:
             prec = np.identity(8) * 0.0001
             info = prec @ v
 
         else:
-            h = np.array([[1 - distance / self._safe_radius]])
+            h = np.array([[1 - distance / self._safe_dist]])
             jacob = np.array([[
-                -distance_gradx0/self._safe_radius, -distance_grady0/self._safe_radius, 0, 0,
-                distance_gradx0/self._safe_radius, distance_grady0/self._safe_radius, 0, 0]])  # [1, 8]
-            precision = np.identity(1) * self._z_precision * (self._safe_radius**2)
+                -distance_gradx0/self._safe_dist, -distance_grady0/self._safe_dist, 0, 0,
+                distance_gradx0/self._safe_dist, distance_grady0/self._safe_dist, 0, 0]])  # [1, 8]
+            precision = np.identity(1) * self._z_precision * (self._safe_dist**2)
 
             prec = jacob.T @ precision @ jacob
             info = jacob.T @ precision @ (jacob @ v + z - h)
