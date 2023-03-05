@@ -21,11 +21,12 @@ class RemoteVNode(VNode):
 
 class DynaFNode(FNode):
     def __init__(self, name: str, vnodes: List[VNode], factor: Gaussian = None,
-                 dt: float = 0.1, z_precision: float = 1) -> None:
+                 dt: float = 0.1, pos_prec: float = 10, vel_prec: float = 2) -> None:
         assert len(vnodes) == 2
         super().__init__(name, vnodes, factor)
         self._dt = dt
-        self._z_precision = z_precision
+        self._pos_prec= pos_prec
+        self._vel_prec= vel_prec
 
     def update_factor(self):
         # NOTE target: ||h(x) - z)||2 -> 0
@@ -55,7 +56,7 @@ class DynaFNode(FNode):
         #     [dt**2/2, 0, dt, 0],
         #     [0, dt**2/2, 0, dt]
         # ])) * self._z_precision  # [4, 4]
-        precision = np.diag([100, 100, 1, 1])
+        precision = np.diag([self._pos_prec, self._pos_prec, self._vel_prec, self._vel_prec])
 
         # NOTE https://arxiv.org/pdf/1910.14139.pdf
         prec = jacob.T @ precision @ jacob
@@ -66,7 +67,7 @@ class DynaFNode(FNode):
 
 class ObstacleFNode(FNode):
     def __init__(self, name: str, vnodes: List[VNode], factor: Gaussian = None,
-                 omap: ObstacleMap = None, safe_dist: float = 5, z_precision: float = 1000) -> None:
+                 omap: ObstacleMap = None, safe_dist: float = 5, z_precision: float = 100) -> None:
         assert len(vnodes) == 1
         super().__init__(name, vnodes, factor)
         self._omap = omap
@@ -86,7 +87,7 @@ class ObstacleFNode(FNode):
             jacob = np.zeros((1, 4))
         else:
             jacob = np.array([[-distance_gradx/self._safe_dist, -distance_grady/self._safe_dist, 0, 0]])  # [1, 4]
-        precision = np.identity(1) * self._z_precision
+        precision = np.identity(1) * self._z_precision * self._safe_dist**2
 
         prec = jacob.T @ precision @ jacob
         info = jacob.T @ precision @ (jacob @ v + z - h)

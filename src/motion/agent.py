@@ -8,7 +8,18 @@ from .nodes import DynaFNode, ObstacleFNode, DistFNode, RemoteVNode
 
 
 class Agent:
-    def __init__(self, name: str, state, target = None, steps: int = 8, radius: int = 5, omap: ObstacleMap = None, env: 'Env' = None) -> None:
+    def __init__(
+            self, name: str, state, target = None, steps: int = 8, radius: int = 5, omap: ObstacleMap = None, env: 'Env' = None,
+            start_position_precision = 1000,
+            start_velocity_precision = 100,
+            target_position_precision = 1,
+            target_velocity_precision = 1,
+            dynamic_postion_precision = 10,
+            dynamic_velocity_precision = 2,
+            obstacle_precision = 100,
+            distance_precision = 100,
+            dt: float = 0.1
+        ) -> None:
         assert steps > 1
         if np.shape(state) == ():
             state = np.array([[state]])
@@ -26,14 +37,33 @@ class Agent:
         self._radius = radius
         self._env = env
 
+        self._dt = dt
+        self._startFNode_pos_prec = start_position_precision
+        self._startFNode_vel_prec = start_velocity_precision
+        self._targetFNode_pos_prec = target_position_precision
+        self._targetFNode_vel_prec = target_velocity_precision
+        self._distFNode_prec = distance_precision
+
+        # Create VNodes
         self._vnodes = [VNode(f'v{i}', [f'v{i}.x', f'v{i}.y', f'v{i}.vx', f'v{i}.vy']) for i in range(steps)]
+
+        # Create FNode for start and target
         self._fnode_start = FNode('fstart', [self._vnodes[0]])
         self._fnode_end = FNode('fend', [self._vnodes[-1]])
         self.set_state(state)
         self.set_target(target)
 
-        self._fnodes_dyna = [DynaFNode(f'fd{i}{i+1}', [self._vnodes[i], self._vnodes[i+1]]) for i in range(steps-1)]
-        self._fnodes_obst = [ObstacleFNode(f'fo{i}', [self._vnodes[i]], omap=omap, safe_dist=self.r) for i in range(1, steps)]
+        # Create DynaFNode
+        self._fnodes_dyna = [DynaFNode(
+            f'fd{i}{i+1}', [self._vnodes[i], self._vnodes[i+1]], dt=self._dt,
+            pos_prec=dynamic_postion_precision, vel_prec=dynamic_velocity_precision
+        ) for i in range(steps-1)]
+
+        # Create ObstacleFNode
+        self._fnodes_obst = [ObstacleFNode(
+            f'fo{i}', [self._vnodes[i]], omap=omap, safe_dist=self.r,
+            z_precision=obstacle_precision
+        ) for i in range(1, steps)]
 
         self._graph = FactorGraph()
         self._graph.connect(self._vnodes[0], self._fnode_start)
@@ -116,20 +146,20 @@ class Agent:
     def set_state(self, state):
         self._state = np.array(state)
         v0 = self._vnodes[0]
-        self._fnode_start._factor = Gaussian(v0.dims, state, np.diag([0.001]*4))
-        v0._belief = Gaussian(v0.dims, state, np.diag([0.001]*4))
+        cov = np.diag([1/self._startFNode_pos_prec, 1/self._startFNode_pos_prec, 1/self._startFNode_vel_prec, 1/self._startFNode_vel_prec])
+        self._fnode_start._factor = Gaussian(v0.dims, state, cov)
+        v0._belief = Gaussian(v0.dims, state, cov.copy())
 
         # Init position for each vnode, to avoid 0 distance in DistFNode
-        dt = 0.1  # NOTE
         for i in range(1, self._steps):
             s = state + np.random.rand(4, 1) * 0.01
-            s[:2] += s[2:] * dt
+            s[:2] += s[2:] * self._dt
             v = self._vnodes[i]
-            v._belief = Gaussian(v.dims, s, np.diag([0.001]*4))
+            v._belief = Gaussian(v.dims, s, cov.copy())
 
     def set_target(self, target):
         if target is not None:
-            self._fnode_end._factor = Gaussian(self._vnodes[-1].dims, target, np.diag([0.05]*4))
+            self._fnode_end._factor = Gaussian(self._vnodes[-1].dims, target, np.diag([1]*4))
         else:
             self._fnode_end._factor = Gaussian.identity(self._vnodes[-1].dims)
 
@@ -169,7 +199,11 @@ class Agent:
             return
 
         vnodes = [RemoteVNode(f'{on}.v{i}', [f'{on}.v{i}.x', f'{on}.v{i}.y', f'{on}.v{i}.vx', f'{on}.v{i}.vy']) for i in range(1, self._steps)]
-        fnodes = [DistFNode(f'{on}.f{i}', [vnodes[i-1], self._vnodes[i]], safe_dist=self.r+other.r) for i in range(1, self._steps)]
+        fnodes = [DistFNode(
+            f'{on}.f{i}', [vnodes[i-1], self._vnodes[i]], safe_dist=self.r+other.r,
+            z_precision=self._distFNode_prec
+        ) for i in range(1, self._steps)]
+
         for i in range(1, self._steps):
             self._graph.connect(self._vnodes[i], fnodes[i-1])
             self._graph.connect(vnodes[i-1], fnodes[i-1])
@@ -235,7 +269,7 @@ class Env:
             agent_ds = agent_ds[:max_num]
         return [a for a, d in agent_ds]
 
-    def step(self, iters = 12):
+    def step_plan(self, iters = 12):
         for a in self._agents:
             a.step_connect()
         for i in range(iters):
@@ -243,5 +277,7 @@ class Env:
                 a.step_com()
             for a in self._agents:
                 a.step_propagate()
+
+    def step_move(self):
         for a in self._agents:
             a.step_move()
