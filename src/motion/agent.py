@@ -13,11 +13,11 @@ class Agent:
             start_position_precision = 1000,
             start_velocity_precision = 100,
             target_position_precision = 1,
-            target_velocity_precision = 1,
+            target_velocity_precision = 2,
             dynamic_postion_precision = 10,
             dynamic_velocity_precision = 2,
-            obstacle_precision = 100,
-            distance_precision = 100,
+            obstacle_precision = 50,
+            distance_precision = 15,
             dt: float = 0.1
         ) -> None:
         assert steps > 1
