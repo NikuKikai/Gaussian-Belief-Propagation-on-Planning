@@ -108,22 +108,6 @@ class Agent:
     def get_target(self) -> np.ndarray:
         return self._fnode_end._factor.mean
 
-    def step_all_async(self):
-        # Search near agents
-        others = self._env.find_near(self)
-        for o in others:
-            self.setup_com(o)
-        for on in list(self._others.keys()):
-            if self._others[on] not in others:
-                self.end_com(o)
-
-        # Propagate
-        for i in range(self._steps * 3):
-            for o in self._others:
-                self.send(o)
-
-        self.set_state(self._vnodes[1].belief.mean)
-
     def step_connect(self):
         # Search near agents
         others = self._env.find_near(self)
@@ -141,7 +125,13 @@ class Agent:
         self._graph.loopy_propagate()
 
     def step_move(self):
-        self.set_state(self._vnodes[1].belief.mean)
+        self._fnode_start._factor = Gaussian(self._vnodes[0].dims, self._vnodes[1].mean, self._vnodes[1].belief.cov)
+        for i in range(0, self._steps-1):
+            v, v_ = self._vnodes[i], self._vnodes[i+1]
+            v._belief = Gaussian(v.dims, v_.mean, v_.belief.cov)
+        s = v_.mean + np.random.rand(4, 1) * 0.01
+        s[:2] += s[2:] * self._dt
+        v_._belief = Gaussian(v_.dims, s, v_.belief.cov)
 
     def set_state(self, state):
         self._state = np.array(state)
